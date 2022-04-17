@@ -1,11 +1,11 @@
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import ListView
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from .forms import EmailPostForm
+from .forms import EmailPostForm, CommentForm
 from django.core.mail import send_mail
 
 from blog.forms import EmailPostForm
-from .models import Post
+from .models import Post, Comment
 
 
 # Create your views here.
@@ -44,7 +44,7 @@ def post_detail(request, year, month, day, post):
 def post_share(request, post_id):
     # Получение статьи по идентификатору.
     post = get_object_or_404(Post, id=post_id, status='published')
-    send = False
+    sent = False
 
     if request.method == 'POST':
         # Форма была отправлена на сохранение.
@@ -65,3 +65,27 @@ def post_share(request, post_id):
     else:
         form = EmailPostForm()
     return render(request, 'blog/post/share.html', {'post': post, 'form': form, 'sent': sent})
+
+
+def post_detail(request, year, month, day, post):
+    post = get_object_or_404(
+        Post, slug=post, status='published', publish__year=year,
+        publish__month=month, publish__day=day)
+    # Список активных комментариев для этой статьи.
+    comments = post.comments.filter(active=True)
+    new_comment = None
+    if request.method == 'POST':
+        # Пользователь отправил комментарий.
+        comment_form = CommentForm(data=request.POST)
+        if comment_form.is_valid():
+            # Создаем комментарий, но не сохраняем в базе данных
+            new_comment = comment_form.save(commit=False)
+            # Привязываем комментарий к текущей статье
+            new_comment.post = post
+            new_comment.save()
+    else:
+        comment_form = CommentForm()
+    return render(request, 'blog/post/detail.html', {'post': post,
+                                                     'comments': comments,
+                                                     'new_comment': new_comment,
+                                                     'comment_form': comment_form})
